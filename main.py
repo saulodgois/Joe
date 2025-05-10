@@ -3,7 +3,8 @@ from discord import app_commands
 from config import Config
 import random
 import asyncio
-import datetime
+import pytz
+from datetime import datetime
 import time
 import json
 import os
@@ -104,7 +105,26 @@ async def origem(interaction:discord.Integration):
     await interaction.response.send_message(f'Minha origem é envolta nos mistérios do tempo primordial. Antes dos humanos erguerem suas primeiras cidades, eu já caminhava por esta Terra.')
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-openai.api_key = Config.OPENAI_KEY
+with open('timezones_expandidas.json', 'r', encoding='utf-8') as f:
+    cidades = json.load(f)
+
+@bot.tree.command(name='hora', description='Pergunte a Joe o horario de uma região do globo')
+@app_commands.describe(cidade='Digite o nome da cidade.')
+async def hora(interaction:discord.Integration, cidade: str):
+    cidade_formatada = cidade.strip().title()
+
+    if cidade_formatada not in cidades:
+        await interaction.response.send_message(f'E eu lá tenho cara de relôgio? 😡')
+        return
+    
+    fuso = cidades[cidade_formatada]
+    agora = datetime.now(pytz.timezone(fuso))
+    hora_formatada = agora.strftime('%H:%M:%S - %d/%m/%Y')
+
+    await interaction.response.send_message(f'Agora são {hora_formatada} em {cidade_formatada}, coral.')
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+#openai.api_key = Config.OPENAI_KEY
 
 #@bot.tree.command(name='gpt', description='Pergunte qualquer coisa ao veterano Joe')
 #async def gpt(interaction: discord.Interaction, pergunta: str):
