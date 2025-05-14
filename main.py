@@ -2,9 +2,11 @@ import discord
 from discord import app_commands
 from config import Config
 import random
+import string
 import asyncio
 import pytz
 from datetime import datetime
+from datetime import date
 import time
 import json
 import os
@@ -30,10 +32,16 @@ class BotJoe(discord.Client):
         print('Minha jornada é eterna. Que desafios o novo dia trará?')
 
     async def on_member_join(self, member):
-        canal_id = 673209682696863787
+        canal_id = int(Config.CANAL_ID)
         canal = self.get_channel(canal_id)
         if canal:
             await canal.send(f'Boas-vindas, {member.mention}. Que sua breve estadia neste reino seja... interessante. Eu sou Joe, uma lenda que precede sua chegada em incontáveis eras.')
+
+    async def on_member_remove(self, member):
+        canal_id = int(Config.CANAL_ID)
+        canal = self.get_channel(canal_id)
+        if canal:
+            await canal.send(f'Adeus, {member.mention}. O seu ciclo se por aqui se fechou')
 
 
 bot = BotJoe()
@@ -349,6 +357,105 @@ async def trofeus(interaction: discord.Interaction):
     embed.set_footer(text='Nós observamos seus progressos...')
 
     await interaction.response.send_message(embed=embed)
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+API_KEY = Config.API_FOOTBALL_KEY
+
+HEADERS = {
+    "x-apisports-key": API_KEY
+}
+
+LIGAS_TOP5 = {
+    "Premier League": 39,
+    "La Liga": 140,
+    "Serie A": 135,
+    "Bundesliga": 78,
+    "Brasileirão": 71
+}
+
+@bot.tree.command(name='jogos_hoje', description='Joe diz os jogos do dia das principais ligas do mundo')
+async def jogos_hoje(interaction: discord.Interaction):
+    await interaction.response.defer()
+    hoje = datetime.now().date().isoformat()
+    resultados = []
+
+    async with aiohttp.ClientSession() as session:
+        for nome_liga, liga_id in LIGAS_TOP5.items():
+            url = f"https://v3.football.api-sports.io/fixtures?date={hoje}&league={liga_id}&season=2024"
+            async with session.get(url, headers=HEADERS) as resp:
+                data = await resp.json()
+                jogos = data.get('response', [])
+
+                if jogos:
+                    resultados.append(f"🏆 **{nome_liga}**")
+                    for jogo in jogos:
+                        casa = jogo['teams']['home']['name']
+                        fora = jogo['teams']['away']['name']
+                        hora_utc = jogo['fixture']['date'][11:16]
+                        resultados.append(f"   ⚽ {casa} x {fora} — `{hora_utc} UTC`")
+                    resultados.append("")
+
+    if resultados:
+        resposta = "\n".join(resultados)
+    else:
+        resposta = "Hoje tá mais parado que VAR em amistoso. Nenhum jogo nas top-5 ligas."
+
+    await interaction.followup.send(content=f"📅 **Jogos de hoje:**\n{resposta}")
+
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+@bot.tree.command(name='gerar_senha', description='Joe cria uma senha segura para você')
+@app_commands.describe(
+    tamanho='Quantos caracteres a senha deve ter (1 a 64)',
+    complexidade='Nível: apenas_numeros, numeros_e_letras ou completa'
+)
+async def gerar_senha(interaction: discord.Interaction, tamanho: int, complexidade: str):
+    if tamanho < 1:
+        await interaction.response.send_message(
+            'Você quer uma senha ou não? 🤨 Não existe uma senha com menos de um caracter.',
+            ephemeral=True
+        )
+        return
+    elif tamanho > 64:
+        await interaction.response.send_message(
+            'Você quer que eu escreva uma bíblia ou uma senha? Só vou escrever no máximo 64 caracteres.',
+            ephemeral=True
+        )
+        return
+
+    complexidade = complexidade.lower()
+    
+    def gerar_senha_segura():
+        for _ in range(100):
+            if complexidade == 'apenas_numeros':
+                senha = ''.join(random.choices(string.digits, k=tamanho))
+                return senha
+            
+            elif complexidade == 'numeros_e_letras':
+                senha = ''.join(random.choices(string.ascii_letters + string.digits, k=tamanho))
+                if any(c.isdigit() for c in senha) and any(c.isalpha() for c in senha):
+                    return senha
+                
+            elif complexidade == 'completa':
+                senha = ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation, k=tamanho))
+                if (any(c.isdigit() for c in senha) and (any(c.isalpha() for c in senha) and (any(c in string.punctuation for c in senha)))):
+                    return senha
+
+        return senha
+
+    if complexidade not in ['apenas_numeros', 'numeros_e_letras', 'completa']:
+        await interaction.response.send_message(
+            'Complexidade inválida. Use: `apenas_numeros`, `numeros_e_letras` ou `completa`.',
+            ephemeral=True
+        )
+        return
+
+    senha = gerar_senha_segura()
+
+    await interaction.response.send_message(
+        f'Fico feliz que você confia na minha experiência para criar uma senha segura. 🔐\n\n`{senha}`\n\n'
+        'Essa mensagem fica só entre nós, ninguém mais pode ver... então não compartilhe com os outros mortais! 😏',
+        ephemeral=True
+    )
 
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
